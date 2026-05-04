@@ -1,0 +1,169 @@
+(code na accurate)
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ==========================================
+# 1. Input the link lengths of the manipulator
+# ==========================================
+print("--- 1. Link Lengths ---")
+a1 = float(input("a1 = "))
+a2 = float(input("a2 = "))
+a3 = float(input("a3 = "))
+
+# ==========================================
+# 2. Input the limits of T1, theta2, and theta3
+# ==========================================
+print("\n--- 2. Joint Limits ---")
+T1_min = float(input("T1 min (deg) = "))
+T1_max = float(input("T1 max (deg) = "))
+T2_min = float(input("T2 min (deg) = "))
+T2_max = float(input("T2 max (deg) = "))
+T3_min = float(input("T3 min (deg) = "))
+T3_max = float(input("T3 max (deg) = "))
+
+# steps=19 ensures it hits exactly 0, 10, 20... 90... 180 degrees
+steps = 19
+T1_vals = np.linspace(T1_min, T1_max, steps)
+T2_vals = np.linspace(T2_min, T2_max, steps)
+T3_vals = np.linspace(T3_min, T3_max, steps)
+
+# ==========================================
+# 3. Compute the workspace (Universal Setup)
+# ==========================================
+print("\n--- 3. Computing Workspace ---")
+
+def compute_HTM(PT):
+    H_total = np.eye(4)
+    for i in range(len(PT)):
+        theta = PT[i][0]
+        alpha = PT[i][1]
+        r     = PT[i][2]
+        d     = PT[i][3]
+        
+        H = np.array([
+            [np.cos(theta), -np.sin(theta)*np.cos(alpha),  np.sin(theta)*np.sin(alpha), r*np.cos(theta)],
+            [np.sin(theta),  np.cos(theta)*np.cos(alpha), -np.cos(theta)*np.sin(alpha), r*np.sin(theta)],
+            [0,              np.sin(alpha),               np.cos(alpha),               d              ],
+            [0,              0,                           0,                           1              ]
+        ])
+        H_total = np.dot(H_total, H)
+    return H_total
+
+X = []
+Y = []
+Z = []
+
+# Generation of position vectors using loops
+for t1 in T1_vals:
+    for t2 in T2_vals:
+        for t3 in T3_vals:
+            t1_rad = (t1/180)*np.pi
+            t2_rad = (t2/180)*np.pi
+            t3_rad = (t3/180)*np.pi
+            
+            # Parametric Table for SPARTANKIT
+            PT =PT = [
+                     [t1_rad, np.pi/2, 0, a1],
+                     [t2_rad + np.pi/2, 0, a2, 0],
+                     [t3_rad + 3*np.pi/2, 0, a3, 0],
+                     ]
+            H0_3 = compute_HTM(PT)
+            
+            X.append(H0_3[0][3])
+            Y.append(H0_3[1][3])
+            Z.append(H0_3[2][3])
+
+X = np.array(X)
+Y = np.array(Y)
+Z = np.array(Z)
+
+# ==========================================
+# 4. Print the limits of the position vectors
+# ==========================================
+print("\n--- 4. Position Vector Limits ---")
+print("x limits: ", np.around(np.min(X), 3), "to", np.around(np.max(X), 3))
+print("y limits: ", np.around(np.min(Y), 3), "to", np.around(np.max(Y), 3))
+print("z limits: ", np.around(np.min(Z), 3), "to", np.around(np.max(Z), 3))
+
+# ==========================================
+# 5. Simulate the workspace
+# ==========================================
+print("\n--- 5. Simulating Workspace ---")
+print("NOTE: Close the 3D plot window to continue to Inverse Kinematics.")
+
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+ax.scatter(X, Y, Z, c=Z, cmap='jet', marker='o', s=2, alpha=0.5)
+
+ax.set_title('ARTICULATED-V3 Workspace Simulation')
+ax.set_xlabel('X (mm)')
+ax.set_ylabel('Y (mm)')
+ax.set_zlabel('Z (mm)')
+plt.show()
+
+# ==========================================
+# 6. Solve the Inverse Kinematics
+# ==========================================
+print("\n--- 6. Inverse Kinematics ---")
+x0_3 = float(input("x0_3 = "))
+y0_3 = float(input("y0_3 = "))
+z0_3 = float(input("z0_3 = "))
+
+# --- REACHABILITY CHECK ---
+r1 = np.sqrt((y0_3**2) + (x0_3**2))
+max_reach = a2 + a3
+
+if r1 > max_reach:
+    print(f"\n[ERROR] Target is OUT OF BOUNDS!")
+    print(f"Maximum reach in XY plane is {max_reach} mm, but your target is {np.around(r1,3)} mm away.")
+    
+else:
+
+    # Solution 1
+    theta1 = np.arctan2(y0_3, x0_3)
+    theta1 = theta1*180/np.pi
+
+
+    # Solution 2
+    r1 = np.sqrt((x0_3**2)+(y0_3**2))
+
+
+    # Solution 3
+    r2 = z0_3 - a1
+
+
+    # Solution 4
+    phi1 = np.arctan2(r2, r1)
+
+
+    # solution 5
+    r3 = np.sqrt((r1**2)+(r2**2))
+
+
+    # Solution 6
+    phi3 = np.arccos((a2**2+a3**2-r3**2)/(2*a2*a3))
+
+
+    # Solution 7
+    phi2 = np.arccos((a2**2+r3**2-a3**2)/(2*a2*r3))
+
+
+    # Solution 8
+    theta2 = phi2+phi1
+    theta2 = (np.pi/2)-theta2
+    theta2 = theta2*180/np.pi
+
+
+    # Solution 9
+    theta3 = phi3+(np.pi)
+    theta3 = theta3-(3*np.pi/2)
+    theta3 = theta3*180/np.pi
+
+    # ==========================================
+    # 7. Print the joint variables
+    # ==========================================
+    print("\n--- 7. Joint Variables ---")
+    print("theta1 = ", np.around(theta1, 3))
+    print("theta2 = ", np.around(theta2, 3))
+    print("theta3 = ", np.around(theta3, 3))
